@@ -1,0 +1,17 @@
+target/
+.mvn/
+*.class
+*.log
+*.jar
+*.war
+*.ear
+
+.idea/
+.vscode/
+*.iml
+
+.DS_Store
+Thumbs.db
+
+hs_err_pid*
+replay_pid*

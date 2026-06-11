@@ -1,0 +1,45 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      default-filters:
+        - AddResponseHeader=X-Gateway, ecommerce-api-gateway
+      routes:
+        - id: auth-service
+          uri: http://localhost:8081
+          predicates:
+            - Path=/auth/**
+        - id: product-service
+          uri: http://localhost:8082
+          predicates:
+            - Path=/products/**
+        - id: cart-service
+          uri: http://localhost:8083
+          predicates:
+            - Path=/carts/**
+        - id: order-service
+          uri: http://localhost:8084
+          predicates:
+            - Path=/orders/**
+        - id: inventory-service
+          uri: http://localhost:8085
+          predicates:
+            - Path=/inventory/**
+        - id: payment-service
+          uri: http://localhost:8086
+          predicates:
+            - Path=/payments/**
+        - id: notification-service
+          uri: http://localhost:8087
+          predicates:
+            - Path=/notifications/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,gateway

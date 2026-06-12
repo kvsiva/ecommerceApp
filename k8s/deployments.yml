@@ -15,7 +15,7 @@ spec:
       containers:
         - name: api-gateway
           image: ghcr.io/kvsiva/ecommerceapp-api-gateway:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
           envFrom:
@@ -40,6 +40,10 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -58,7 +62,7 @@ spec:
       containers:
         - name: auth-service
           image: ghcr.io/kvsiva/ecommerceapp-auth-service:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 8081
           envFrom:
@@ -83,6 +87,10 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -101,7 +109,7 @@ spec:
       containers:
         - name: product-service
           image: ghcr.io/kvsiva/ecommerceapp-product-service:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 8082
           envFrom:
@@ -126,6 +134,10 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -144,7 +156,7 @@ spec:
       containers:
         - name: cart-service
           image: ghcr.io/kvsiva/ecommerceapp-cart-service:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 8083
           envFrom:
@@ -169,6 +181,10 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -187,7 +203,7 @@ spec:
       containers:
         - name: order-service
           image: ghcr.io/kvsiva/ecommerceapp-order-service:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 8084
           envFrom:
@@ -212,6 +228,10 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -230,7 +250,7 @@ spec:
       containers:
         - name: inventory-service
           image: ghcr.io/kvsiva/ecommerceapp-inventory-service:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 8085
           envFrom:
@@ -255,6 +275,10 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -273,7 +297,7 @@ spec:
       containers:
         - name: payment-service
           image: ghcr.io/kvsiva/ecommerceapp-payment-service:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 8086
           envFrom:
@@ -298,6 +322,10 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -316,7 +344,7 @@ spec:
       containers:
         - name: notification-service
           image: ghcr.io/kvsiva/ecommerceapp-notification-service:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 8087
           envFrom:
@@ -341,3 +369,7 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000

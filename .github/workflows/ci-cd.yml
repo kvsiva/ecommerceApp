@@ -96,4 +96,19 @@ jobs:
       - name: Deploy manifests
         run: |
           kubectl apply -k k8s
-          kubectl rollout status deployment/api-gateway -n ecommerce
+          kubectl set image deployment/api-gateway api-gateway=${{ env.IMAGE_PREFIX }}-api-gateway:${{ github.sha }} -n ecommerce
+          kubectl set image deployment/auth-service auth-service=${{ env.IMAGE_PREFIX }}-auth-service:${{ github.sha }} -n ecommerce
+          kubectl set image deployment/product-service product-service=${{ env.IMAGE_PREFIX }}-product-service:${{ github.sha }} -n ecommerce
+          kubectl set image deployment/cart-service cart-service=${{ env.IMAGE_PREFIX }}-cart-service:${{ github.sha }} -n ecommerce
+          kubectl set image deployment/order-service order-service=${{ env.IMAGE_PREFIX }}-order-service:${{ github.sha }} -n ecommerce
+          kubectl set image deployment/inventory-service inventory-service=${{ env.IMAGE_PREFIX }}-inventory-service:${{ github.sha }} -n ecommerce
+          kubectl set image deployment/payment-service payment-service=${{ env.IMAGE_PREFIX }}-payment-service:${{ github.sha }} -n ecommerce
+          kubectl set image deployment/notification-service notification-service=${{ env.IMAGE_PREFIX }}-notification-service:${{ github.sha }} -n ecommerce
+          kubectl rollout status deployment/api-gateway -n ecommerce --timeout=180s
+          kubectl rollout status deployment/auth-service -n ecommerce --timeout=180s
+          kubectl rollout status deployment/product-service -n ecommerce --timeout=180s
+          kubectl rollout status deployment/cart-service -n ecommerce --timeout=180s
+          kubectl rollout status deployment/order-service -n ecommerce --timeout=180s
+          kubectl rollout status deployment/inventory-service -n ecommerce --timeout=180s
+          kubectl rollout status deployment/payment-service -n ecommerce --timeout=180s
+          kubectl rollout status deployment/notification-service -n ecommerce --timeout=180s

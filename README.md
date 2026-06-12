@@ -29,6 +29,15 @@ This project is generated from the attached architecture diagram. It contains a 
 mvn clean package
 ```
 
+## Docker Build
+
+The root `Dockerfile` builds one service at a time with the `SERVICE` build argument.
+
+```powershell
+docker build --build-arg SERVICE=api-gateway -t ghcr.io/kvsiva/ecommerceapp-api-gateway:latest .
+docker build --build-arg SERVICE=auth-service -t ghcr.io/kvsiva/ecommerceapp-auth-service:latest .
+```
+
 ## Run One Service
 
 ```powershell
@@ -47,6 +56,40 @@ mvn -pl auth-service spring-boot:run
 | Inventory | 8085 |
 | Payment | 8086 |
 | Notification | 8087 |
+
+## Kubernetes Deploy
+
+The `k8s` folder contains Kustomize-ready manifests:
+
+```powershell
+kubectl apply -k k8s
+kubectl get pods -n ecommerce
+kubectl get svc api-gateway -n ecommerce
+```
+
+The gateway is exposed as a `LoadBalancer`. For local clusters such as Minikube or Docker Desktop, use the external IP/localhost behavior provided by your cluster.
+
+## GitHub Actions Pipeline
+
+The workflow in `.github/workflows/ci-cd.yml` runs:
+
+1. Maven build and package.
+2. Docker image build and push to GitHub Container Registry on `main`.
+3. Optional Kubernetes deployment when manually triggered.
+
+For deployment, add this GitHub repository secret:
+
+```text
+KUBE_CONFIG
+```
+
+`KUBE_CONFIG` should contain the kubeconfig for the target cluster. Images are published as:
+
+```text
+ghcr.io/kvsiva/ecommerceapp-api-gateway:latest
+ghcr.io/kvsiva/ecommerceapp-auth-service:latest
+ghcr.io/kvsiva/ecommerceapp-product-service:latest
+```
 
 ## Example Flow
 

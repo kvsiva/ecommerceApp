@@ -1,0 +1,10 @@
+.git
+.github
+**/target
+outputs
+work
+.idea
+.vscode
+*.iml
+*.log
+README.md

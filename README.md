@@ -33,6 +33,20 @@ This project is generated from the attached architecture diagram. It contains a 
 mvn clean package
 ```
 
+## Automated Tests
+
+Run the full unit and controller test suite:
+
+```powershell
+mvn test
+```
+
+Run tests for a single service:
+
+```powershell
+mvn -pl order-service test
+```
+
 ## Docker Build
 
 The root `Dockerfile` builds one service at a time with the `SERVICE` build argument.

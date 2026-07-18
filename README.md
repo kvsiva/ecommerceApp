@@ -47,6 +47,16 @@ Run tests for a single service:
 mvn -pl order-service test
 ```
 
+## SoapUI API Tests
+
+An importable SoapUI project is available at:
+
+```text
+soapui/EcommerceApp-SoapUI-project.xml
+```
+
+It includes REST test cases and test data for service health, auth, product, cart, inventory, order, payment, notification, gateway routing, successful checkout, and payment failure compensation flows.
+
 ## Docker Build
 
 The root `Dockerfile` builds one service at a time with the `SERVICE` build argument.

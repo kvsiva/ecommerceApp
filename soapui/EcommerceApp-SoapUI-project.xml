@@ -1,0 +1,658 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<con:soapui-project id="ecommerce-app-soapui-project" activeEnvironment="Default" name="EcommerceApp REST API Tests" resourceRoot="" soapui-version="5.7.2" abortOnError="false" runType="SEQUENTIAL" xmlns:con="http://eviware.com/soapui/config">
+  <con:settings/>
+  <con:properties>
+    <con:property>
+      <con:name>gatewayBaseUrl</con:name>
+      <con:value>http://localhost:8080</con:value>
+    </con:property>
+    <con:property>
+      <con:name>authBaseUrl</con:name>
+      <con:value>http://localhost:8081</con:value>
+    </con:property>
+    <con:property>
+      <con:name>productBaseUrl</con:name>
+      <con:value>http://localhost:8082</con:value>
+    </con:property>
+    <con:property>
+      <con:name>cartBaseUrl</con:name>
+      <con:value>http://localhost:8083</con:value>
+    </con:property>
+    <con:property>
+      <con:name>orderBaseUrl</con:name>
+      <con:value>http://localhost:8084</con:value>
+    </con:property>
+    <con:property>
+      <con:name>inventoryBaseUrl</con:name>
+      <con:value>http://localhost:8085</con:value>
+    </con:property>
+    <con:property>
+      <con:name>paymentBaseUrl</con:name>
+      <con:value>http://localhost:8086</con:value>
+    </con:property>
+    <con:property>
+      <con:name>notificationBaseUrl</con:name>
+      <con:value>http://localhost:8087</con:value>
+    </con:property>
+    <con:property>
+      <con:name>customerEmail</con:name>
+      <con:value>soapui.customer@example.com</con:value>
+    </con:property>
+    <con:property>
+      <con:name>customerPassword</con:name>
+      <con:value>secret123</con:value>
+    </con:property>
+    <con:property>
+      <con:name>customerId</con:name>
+      <con:value>soapui-customer-1</con:value>
+    </con:property>
+    <con:property>
+      <con:name>testProductId</con:name>
+      <con:value>soapui-product-1</con:value>
+    </con:property>
+  </con:properties>
+  <con:testSuite id="ecommerce-rest-suite" name="Ecommerce REST Regression Suite">
+    <con:settings/>
+    <con:runType>SEQUENTIAL</con:runType>
+    <con:testCase id="health-checks" failOnError="true" failTestCaseOnErrors="true" keepSession="false" maxResults="0" name="01 Health Checks" searchProperties="true">
+      <con:settings/>
+      <con:testStep type="groovy" name="All Services Health">
+        <con:settings/>
+        <con:config>
+          <script><![CDATA[
+import groovy.json.JsonSlurper
+
+def request(String method, String url, String body = null, Map headers = [:]) {
+  def connection = new URL(url).openConnection()
+  connection.requestMethod = method
+  connection.connectTimeout = 5000
+  connection.readTimeout = 5000
+  headers.each { k, v -> connection.setRequestProperty(k, v) }
+  if (body != null) {
+    connection.doOutput = true
+    connection.setRequestProperty('Content-Type', 'application/json')
+    connection.outputStream.withWriter('UTF-8') { it << body }
+  }
+  def status = connection.responseCode
+  def text = status >= 400 ? connection.errorStream?.getText('UTF-8') : connection.inputStream?.getText('UTF-8')
+  [status: status, body: text ?: '']
+}
+
+def services = [
+  'API Gateway': context.expand('${#Project#gatewayBaseUrl}'),
+  'Auth': context.expand('${#Project#authBaseUrl}'),
+  'Product': context.expand('${#Project#productBaseUrl}'),
+  'Cart': context.expand('${#Project#cartBaseUrl}'),
+  'Order': context.expand('${#Project#orderBaseUrl}'),
+  'Inventory': context.expand('${#Project#inventoryBaseUrl}'),
+  'Payment': context.expand('${#Project#paymentBaseUrl}'),
+  'Notification': context.expand('${#Project#notificationBaseUrl}')
+]
+
+services.each { name, baseUrl ->
+  def response = request('GET', "${baseUrl}/actuator/health")
+  assert response.status == 200 : "${name} health expected 200 but was ${response.status}: ${response.body}"
+  assert response.body.contains('"status":"UP"') : "${name} health response should be UP: ${response.body}"
+  log.info "${name} health is UP"
+}
+          ]]></script>
+        </con:config>
+      </con:testStep>
+      <con:properties/>
+    </con:testCase>
+    <con:testCase id="auth-tests" failOnError="true" failTestCaseOnErrors="true" keepSession="false" maxResults="0" name="02 Auth Service Tests" searchProperties="true">
+      <con:settings/>
+      <con:testStep type="groovy" name="Register Login Validate Negative Cases">
+        <con:settings/>
+        <con:config>
+          <script><![CDATA[
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
+def json = new JsonSlurper()
+def baseUrl = context.expand('${#Project#authBaseUrl}')
+def email = "soapui.${System.currentTimeMillis()}@example.com"
+def password = context.expand('${#Project#customerPassword}')
+
+def request(String method, String url, String body = null, Map headers = [:]) {
+  def connection = new URL(url).openConnection()
+  connection.requestMethod = method
+  connection.connectTimeout = 5000
+  connection.readTimeout = 5000
+  headers.each { k, v -> connection.setRequestProperty(k, v) }
+  if (body != null) {
+    connection.doOutput = true
+    connection.setRequestProperty('Content-Type', 'application/json')
+    connection.outputStream.withWriter('UTF-8') { it << body }
+  }
+  def status = connection.responseCode
+  def text = status >= 400 ? connection.errorStream?.getText('UTF-8') : connection.inputStream?.getText('UTF-8')
+  [status: status, body: text ?: '']
+}
+
+def registerBody = JsonOutput.toJson([email: email, password: password, role: 'CUSTOMER'])
+def registered = request('POST', "${baseUrl}/auth/register", registerBody)
+assert registered.status == 200 : registered.body
+def token = json.parseText(registered.body).accessToken
+assert token
+testRunner.testCase.setPropertyValue('accessToken', token)
+testRunner.testCase.testSuite.project.setPropertyValue('customerEmail', email)
+
+def duplicate = request('POST', "${baseUrl}/auth/register", registerBody)
+assert duplicate.status == 409 : "Duplicate registration should return 409 but was ${duplicate.status}"
+
+def login = request('POST', "${baseUrl}/auth/login", JsonOutput.toJson([email: email, password: password]))
+assert login.status == 200 : login.body
+assert json.parseText(login.body).accessToken
+
+def invalidLogin = request('POST', "${baseUrl}/auth/login", JsonOutput.toJson([email: email, password: 'wrong-password']))
+assert invalidLogin.status == 401 : "Invalid login should return 401 but was ${invalidLogin.status}"
+
+def claims = request('GET', "${baseUrl}/auth/validate", null, ['Authorization': "Bearer ${token}"])
+assert claims.status == 200 : claims.body
+def claimsJson = json.parseText(claims.body)
+assert claimsJson.email == email
+assert claimsJson.role == 'CUSTOMER'
+          ]]></script>
+        </con:config>
+      </con:testStep>
+      <con:properties/>
+    </con:testCase>
+    <con:testCase id="product-tests" failOnError="true" failTestCaseOnErrors="true" keepSession="false" maxResults="0" name="03 Product Service Tests" searchProperties="true">
+      <con:settings/>
+      <con:testStep type="groovy" name="List Search Create Update Not Found">
+        <con:settings/>
+        <con:config>
+          <script><![CDATA[
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
+def json = new JsonSlurper()
+def baseUrl = context.expand('${#Project#productBaseUrl}')
+
+def request(String method, String url, String body = null) {
+  def connection = new URL(url).openConnection()
+  connection.requestMethod = method
+  connection.connectTimeout = 5000
+  connection.readTimeout = 5000
+  if (body != null) {
+    connection.doOutput = true
+    connection.setRequestProperty('Content-Type', 'application/json')
+    connection.outputStream.withWriter('UTF-8') { it << body }
+  }
+  def status = connection.responseCode
+  def text = status >= 400 ? connection.errorStream?.getText('UTF-8') : connection.inputStream?.getText('UTF-8')
+  [status: status, body: text ?: '']
+}
+
+def list = request('GET', "${baseUrl}/products")
+assert list.status == 200 : list.body
+assert json.parseText(list.body).size() >= 3
+
+def search = request('GET', "${baseUrl}/products?q=Travel")
+assert search.status == 200 : search.body
+assert json.parseText(search.body).any { it.category == 'Travel' }
+
+def createBody = JsonOutput.toJson([name: 'SoapUI Keyboard', category: 'Electronics', price: 59.99, description: 'Automated test product'])
+def created = request('POST', "${baseUrl}/products", createBody)
+assert created.status == 200 : created.body
+def product = json.parseText(created.body)
+assert product.id
+assert product.name == 'SoapUI Keyboard'
+testRunner.testCase.setPropertyValue('productId', product.id)
+testRunner.testCase.testSuite.project.setPropertyValue('createdProductId', product.id)
+
+def fetched = request('GET', "${baseUrl}/products/${product.id}")
+assert fetched.status == 200 : fetched.body
+assert json.parseText(fetched.body).id == product.id
+
+def updated = request('PUT', "${baseUrl}/products/${product.id}", JsonOutput.toJson([name: 'SoapUI Keyboard Pro', category: 'Electronics', price: 69.99, description: 'Updated by SoapUI']))
+assert updated.status == 200 : updated.body
+assert json.parseText(updated.body).name == 'SoapUI Keyboard Pro'
+
+def missingGet = request('GET', "${baseUrl}/products/missing-product")
+assert missingGet.status == 404 : "Missing product GET should return 404 but was ${missingGet.status}"
+
+def missingUpdate = request('PUT', "${baseUrl}/products/missing-product", createBody)
+assert missingUpdate.status == 404 : "Missing product update should return 404 but was ${missingUpdate.status}"
+          ]]></script>
+        </con:config>
+      </con:testStep>
+      <con:properties/>
+    </con:testCase>
+    <con:testCase id="cart-tests" failOnError="true" failTestCaseOnErrors="true" keepSession="false" maxResults="0" name="04 Cart Service Tests" searchProperties="true">
+      <con:settings/>
+      <con:testStep type="groovy" name="Get Add Multiple Items Clear">
+        <con:settings/>
+        <con:config>
+          <script><![CDATA[
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
+def json = new JsonSlurper()
+def baseUrl = context.expand('${#Project#cartBaseUrl}')
+def customerId = context.expand('${#Project#customerId}')
+
+def request(String method, String url, String body = null) {
+  def connection = new URL(url).openConnection()
+  connection.requestMethod = method
+  connection.connectTimeout = 5000
+  connection.readTimeout = 5000
+  if (body != null) {
+    connection.doOutput = true
+    connection.setRequestProperty('Content-Type', 'application/json')
+    connection.outputStream.withWriter('UTF-8') { it << body }
+  }
+  def status = connection.responseCode
+  def text = status >= 400 ? connection.errorStream?.getText('UTF-8') : connection.inputStream?.getText('UTF-8')
+  [status: status, body: text ?: '']
+}
+
+def empty = request('GET', "${baseUrl}/carts/${customerId}")
+assert empty.status == 200 : empty.body
+assert json.parseText(empty.body).items.size() == 0
+
+def itemOne = request('POST', "${baseUrl}/carts/${customerId}/items", JsonOutput.toJson([productId: 'demo-laptop', quantity: 1, unitPrice: 799.00]))
+assert itemOne.status == 200 : itemOne.body
+assert json.parseText(itemOne.body).items.size() == 1
+
+def itemTwo = request('POST', "${baseUrl}/carts/${customerId}/items", JsonOutput.toJson([productId: 'demo-headphones', quantity: 2, unitPrice: 99.00]))
+assert itemTwo.status == 200 : itemTwo.body
+assert json.parseText(itemTwo.body).items.size() == 2
+
+def invalidItem = request('POST', "${baseUrl}/carts/${customerId}/items", JsonOutput.toJson([productId: '', quantity: 0, unitPrice: -1]))
+assert invalidItem.status == 400 : "Invalid cart item should return 400 but was ${invalidItem.status}"
+
+def cleared = request('DELETE', "${baseUrl}/carts/${customerId}")
+assert cleared.status == 200 : cleared.body
+
+def afterClear = request('GET', "${baseUrl}/carts/${customerId}")
+assert afterClear.status == 200 : afterClear.body
+assert json.parseText(afterClear.body).items.size() == 0
+          ]]></script>
+        </con:config>
+      </con:testStep>
+      <con:properties/>
+    </con:testCase>
+    <con:testCase id="inventory-tests" failOnError="true" failTestCaseOnErrors="true" keepSession="false" maxResults="0" name="05 Inventory Service Tests" searchProperties="true">
+      <con:settings/>
+      <con:testStep type="groovy" name="List Upsert Reserve Release Conflict">
+        <con:settings/>
+        <con:config>
+          <script><![CDATA[
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
+def json = new JsonSlurper()
+def baseUrl = context.expand('${#Project#inventoryBaseUrl}')
+def productId = context.expand('${#Project#testProductId}')
+
+def request(String method, String url, String body = null) {
+  def connection = new URL(url).openConnection()
+  connection.requestMethod = method
+  connection.connectTimeout = 5000
+  connection.readTimeout = 5000
+  if (body != null) {
+    connection.doOutput = true
+    connection.setRequestProperty('Content-Type', 'application/json')
+    connection.outputStream.withWriter('UTF-8') { it << body }
+  }
+  def status = connection.responseCode
+  def text = status >= 400 ? connection.errorStream?.getText('UTF-8') : connection.inputStream?.getText('UTF-8')
+  [status: status, body: text ?: '']
+}
+
+def list = request('GET', "${baseUrl}/inventory")
+assert list.status == 200 : list.body
+assert json.parseText(list.body).size() >= 2
+
+def upsert = request('PUT', "${baseUrl}/inventory/${productId}", JsonOutput.toJson([available: 5]))
+assert upsert.status == 200 : upsert.body
+assert json.parseText(upsert.body).available == 5
+
+def reserveBody = JsonOutput.toJson([orderId: 'soapui-order-reserve', items: [[productId: productId, quantity: 3, unitPrice: 10.00]]])
+def reserved = request('POST', "${baseUrl}/inventory/reserve", reserveBody)
+assert reserved.status == 200 : reserved.body
+def reservation = json.parseText(reserved.body)
+assert reservation.reservationId
+testRunner.testCase.setPropertyValue('reservationId', reservation.reservationId)
+
+def conflict = request('POST', "${baseUrl}/inventory/reserve", JsonOutput.toJson([orderId: 'soapui-order-conflict', items: [[productId: productId, quantity: 99, unitPrice: 10.00]]]))
+assert conflict.status == 409 : "Insufficient stock should return 409 but was ${conflict.status}"
+
+def release = request('POST', "${baseUrl}/inventory/release/${reservation.reservationId}")
+assert release.status == 200 : release.body
+          ]]></script>
+        </con:config>
+      </con:testStep>
+      <con:properties/>
+    </con:testCase>
+    <con:testCase id="order-tests" failOnError="true" failTestCaseOnErrors="true" keepSession="false" maxResults="0" name="06 Order Service Tests" searchProperties="true">
+      <con:settings/>
+      <con:testStep type="groovy" name="List Create Get Confirm Cancel Missing">
+        <con:settings/>
+        <con:config>
+          <script><![CDATA[
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
+def json = new JsonSlurper()
+def baseUrl = context.expand('${#Project#orderBaseUrl}')
+def customerId = context.expand('${#Project#customerId}')
+
+def request(String method, String url, String body = null) {
+  def connection = new URL(url).openConnection()
+  connection.requestMethod = method
+  connection.connectTimeout = 5000
+  connection.readTimeout = 5000
+  if (body != null) {
+    connection.doOutput = true
+    connection.setRequestProperty('Content-Type', 'application/json')
+    connection.outputStream.withWriter('UTF-8') { it << body }
+  }
+  def status = connection.responseCode
+  def text = status >= 400 ? connection.errorStream?.getText('UTF-8') : connection.inputStream?.getText('UTF-8')
+  [status: status, body: text ?: '']
+}
+
+def list = request('GET', "${baseUrl}/orders")
+assert list.status == 200 : list.body
+
+def createBody = JsonOutput.toJson([customerId: customerId, items: [
+  [productId: 'demo-laptop', quantity: 1, unitPrice: 799.00],
+  [productId: 'demo-headphones', quantity: 2, unitPrice: 99.00]
+]])
+def created = request('POST', "${baseUrl}/orders", createBody)
+assert created.status == 200 : created.body
+def order = json.parseText(created.body)
+assert order.orderId
+assert order.status == 'PENDING'
+assert order.total == 997.00
+testRunner.testCase.setPropertyValue('orderId', order.orderId)
+testRunner.testCase.testSuite.project.setPropertyValue('orderId', order.orderId)
+
+def fetched = request('GET', "${baseUrl}/orders/${order.orderId}")
+assert fetched.status == 200 : fetched.body
+assert json.parseText(fetched.body).orderId == order.orderId
+
+def confirmed = request('POST', "${baseUrl}/orders/${order.orderId}/confirm")
+assert confirmed.status == 200 : confirmed.body
+assert json.parseText(confirmed.body).status == 'CONFIRMED'
+
+def cancelled = request('POST', "${baseUrl}/orders/${order.orderId}/cancel", JsonOutput.toJson([reason: 'SoapUI cancellation test']))
+assert cancelled.status == 200 : cancelled.body
+assert json.parseText(cancelled.body).status == 'CANCELLED'
+
+def missing = request('GET', "${baseUrl}/orders/missing-order")
+assert missing.status == 404 : "Missing order should return 404 but was ${missing.status}"
+          ]]></script>
+        </con:config>
+      </con:testStep>
+      <con:properties/>
+    </con:testCase>
+    <con:testCase id="payment-tests" failOnError="true" failTestCaseOnErrors="true" keepSession="false" maxResults="0" name="07 Payment Service Tests" searchProperties="true">
+      <con:settings/>
+      <con:testStep type="groovy" name="Success Failure List Validation">
+        <con:settings/>
+        <con:config>
+          <script><![CDATA[
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
+def json = new JsonSlurper()
+def baseUrl = context.expand('${#Project#paymentBaseUrl}')
+
+def request(String method, String url, String body = null) {
+  def connection = new URL(url).openConnection()
+  connection.requestMethod = method
+  connection.connectTimeout = 5000
+  connection.readTimeout = 5000
+  if (body != null) {
+    connection.doOutput = true
+    connection.setRequestProperty('Content-Type', 'application/json')
+    connection.outputStream.withWriter('UTF-8') { it << body }
+  }
+  def status = connection.responseCode
+  def text = status >= 400 ? connection.errorStream?.getText('UTF-8') : connection.inputStream?.getText('UTF-8')
+  [status: status, body: text ?: '']
+}
+
+def success = request('POST', "${baseUrl}/payments", JsonOutput.toJson([orderId: 'soapui-order-payment-success', amount: 199.99, forceFailure: false]))
+assert success.status == 200 : success.body
+assert json.parseText(success.body).status == 'SUCCEEDED'
+
+def failure = request('POST', "${baseUrl}/payments", JsonOutput.toJson([orderId: 'soapui-order-payment-failure', amount: 199.99, forceFailure: true]))
+assert failure.status == 200 : failure.body
+assert json.parseText(failure.body).status == 'FAILED'
+
+def invalid = request('POST', "${baseUrl}/payments", JsonOutput.toJson([orderId: '', amount: -1, forceFailure: false]))
+assert invalid.status == 400 : "Invalid payment should return 400 but was ${invalid.status}"
+
+def list = request('GET', "${baseUrl}/payments")
+assert list.status == 200 : list.body
+assert json.parseText(list.body).size() >= 2
+          ]]></script>
+        </con:config>
+      </con:testStep>
+      <con:properties/>
+    </con:testCase>
+    <con:testCase id="notification-tests" failOnError="true" failTestCaseOnErrors="true" keepSession="false" maxResults="0" name="08 Notification Service Tests" searchProperties="true">
+      <con:settings/>
+      <con:testStep type="groovy" name="Send List Validation">
+        <con:settings/>
+        <con:config>
+          <script><![CDATA[
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
+def json = new JsonSlurper()
+def baseUrl = context.expand('${#Project#notificationBaseUrl}')
+def customerId = context.expand('${#Project#customerId}')
+
+def request(String method, String url, String body = null) {
+  def connection = new URL(url).openConnection()
+  connection.requestMethod = method
+  connection.connectTimeout = 5000
+  connection.readTimeout = 5000
+  if (body != null) {
+    connection.doOutput = true
+    connection.setRequestProperty('Content-Type', 'application/json')
+    connection.outputStream.withWriter('UTF-8') { it << body }
+  }
+  def status = connection.responseCode
+  def text = status >= 400 ? connection.errorStream?.getText('UTF-8') : connection.inputStream?.getText('UTF-8')
+  [status: status, body: text ?: '']
+}
+
+def sent = request('POST', "${baseUrl}/notifications", JsonOutput.toJson([customerId: customerId, channel: 'EMAIL', subject: 'Order confirmed', body: 'Your order has been confirmed.']))
+assert sent.status == 200 : sent.body
+def message = json.parseText(sent.body)
+assert message.notificationId
+assert message.status == 'SENT'
+assert message.channel == 'EMAIL'
+
+def invalid = request('POST', "${baseUrl}/notifications", JsonOutput.toJson([customerId: '', channel: '', subject: '', body: '']))
+assert invalid.status == 400 : "Invalid notification should return 400 but was ${invalid.status}"
+
+def list = request('GET', "${baseUrl}/notifications")
+assert list.status == 200 : list.body
+assert json.parseText(list.body).size() >= 1
+          ]]></script>
+        </con:config>
+      </con:testStep>
+      <con:properties/>
+    </con:testCase>
+    <con:testCase id="gateway-tests" failOnError="true" failTestCaseOnErrors="true" keepSession="false" maxResults="0" name="09 API Gateway Route Tests" searchProperties="true">
+      <con:settings/>
+      <con:testStep type="groovy" name="Gateway Routes To Core Services">
+        <con:settings/>
+        <con:config>
+          <script><![CDATA[
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
+def json = new JsonSlurper()
+def baseUrl = context.expand('${#Project#gatewayBaseUrl}')
+
+def request(String method, String url, String body = null) {
+  def connection = new URL(url).openConnection()
+  connection.requestMethod = method
+  connection.connectTimeout = 5000
+  connection.readTimeout = 5000
+  if (body != null) {
+    connection.doOutput = true
+    connection.setRequestProperty('Content-Type', 'application/json')
+    connection.outputStream.withWriter('UTF-8') { it << body }
+  }
+  def status = connection.responseCode
+  def text = status >= 400 ? connection.errorStream?.getText('UTF-8') : connection.inputStream?.getText('UTF-8')
+  [status: status, body: text ?: '', gateway: connection.getHeaderField('X-Gateway')]
+}
+
+def products = request('GET', "${baseUrl}/products")
+assert products.status == 200 : products.body
+assert products.gateway == 'ecommerce-api-gateway'
+assert json.parseText(products.body).size() >= 3
+
+def cart = request('GET', "${baseUrl}/carts/gateway-customer")
+assert cart.status == 200 : cart.body
+assert cart.gateway == 'ecommerce-api-gateway'
+
+def notification = request('POST', "${baseUrl}/notifications", JsonOutput.toJson([customerId: 'gateway-customer', channel: 'SMS', subject: 'Gateway test', body: 'Gateway routed notification']))
+assert notification.status == 200 : notification.body
+assert notification.gateway == 'ecommerce-api-gateway'
+          ]]></script>
+        </con:config>
+      </con:testStep>
+      <con:properties/>
+    </con:testCase>
+    <con:testCase id="checkout-flow-tests" failOnError="true" failTestCaseOnErrors="true" keepSession="false" maxResults="0" name="10 End To End Checkout Flow" searchProperties="true">
+      <con:settings/>
+      <con:testStep type="groovy" name="Reserve Pay Confirm Notify">
+        <con:settings/>
+        <con:config>
+          <script><![CDATA[
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
+def json = new JsonSlurper()
+def inventoryUrl = context.expand('${#Project#inventoryBaseUrl}')
+def orderUrl = context.expand('${#Project#orderBaseUrl}')
+def paymentUrl = context.expand('${#Project#paymentBaseUrl}')
+def notificationUrl = context.expand('${#Project#notificationBaseUrl}')
+def customerId = context.expand('${#Project#customerId}')
+def productId = 'soapui-checkout-product'
+
+def request(String method, String url, String body = null) {
+  def connection = new URL(url).openConnection()
+  connection.requestMethod = method
+  connection.connectTimeout = 5000
+  connection.readTimeout = 5000
+  if (body != null) {
+    connection.doOutput = true
+    connection.setRequestProperty('Content-Type', 'application/json')
+    connection.outputStream.withWriter('UTF-8') { it << body }
+  }
+  def status = connection.responseCode
+  def text = status >= 400 ? connection.errorStream?.getText('UTF-8') : connection.inputStream?.getText('UTF-8')
+  [status: status, body: text ?: '']
+}
+
+assert request('PUT', "${inventoryUrl}/inventory/${productId}", JsonOutput.toJson([available: 10])).status == 200
+
+def orderBody = JsonOutput.toJson([customerId: customerId, items: [[productId: productId, quantity: 2, unitPrice: 25.00]]])
+def orderResponse = request('POST', "${orderUrl}/orders", orderBody)
+assert orderResponse.status == 200 : orderResponse.body
+def order = json.parseText(orderResponse.body)
+assert order.status == 'PENDING'
+assert order.total == 50.00
+
+def reserveResponse = request('POST', "${inventoryUrl}/inventory/reserve", JsonOutput.toJson([orderId: order.orderId, items: order.items]))
+assert reserveResponse.status == 200 : reserveResponse.body
+def reservation = json.parseText(reserveResponse.body)
+assert reservation.reservationId
+
+def paymentResponse = request('POST', "${paymentUrl}/payments", JsonOutput.toJson([orderId: order.orderId, amount: order.total, forceFailure: false]))
+assert paymentResponse.status == 200 : paymentResponse.body
+assert json.parseText(paymentResponse.body).status == 'SUCCEEDED'
+
+def confirmResponse = request('POST', "${orderUrl}/orders/${order.orderId}/confirm")
+assert confirmResponse.status == 200 : confirmResponse.body
+assert json.parseText(confirmResponse.body).status == 'CONFIRMED'
+
+def notifyResponse = request('POST', "${notificationUrl}/notifications", JsonOutput.toJson([customerId: customerId, channel: 'EMAIL', subject: 'Order confirmed', body: "Order ${order.orderId} is confirmed."]))
+assert notifyResponse.status == 200 : notifyResponse.body
+assert json.parseText(notifyResponse.body).status == 'SENT'
+          ]]></script>
+        </con:config>
+      </con:testStep>
+      <con:properties/>
+    </con:testCase>
+    <con:testCase id="payment-failure-compensation-tests" failOnError="true" failTestCaseOnErrors="true" keepSession="false" maxResults="0" name="11 Payment Failure Compensation Flow" searchProperties="true">
+      <con:settings/>
+      <con:testStep type="groovy" name="Reserve Fail Payment Release Cancel Notify">
+        <con:settings/>
+        <con:config>
+          <script><![CDATA[
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
+def json = new JsonSlurper()
+def inventoryUrl = context.expand('${#Project#inventoryBaseUrl}')
+def orderUrl = context.expand('${#Project#orderBaseUrl}')
+def paymentUrl = context.expand('${#Project#paymentBaseUrl}')
+def notificationUrl = context.expand('${#Project#notificationBaseUrl}')
+def customerId = context.expand('${#Project#customerId}')
+def productId = 'soapui-compensation-product'
+
+def request(String method, String url, String body = null) {
+  def connection = new URL(url).openConnection()
+  connection.requestMethod = method
+  connection.connectTimeout = 5000
+  connection.readTimeout = 5000
+  if (body != null) {
+    connection.doOutput = true
+    connection.setRequestProperty('Content-Type', 'application/json')
+    connection.outputStream.withWriter('UTF-8') { it << body }
+  }
+  def status = connection.responseCode
+  def text = status >= 400 ? connection.errorStream?.getText('UTF-8') : connection.inputStream?.getText('UTF-8')
+  [status: status, body: text ?: '']
+}
+
+assert request('PUT', "${inventoryUrl}/inventory/${productId}", JsonOutput.toJson([available: 4])).status == 200
+
+def orderResponse = request('POST', "${orderUrl}/orders", JsonOutput.toJson([customerId: customerId, items: [[productId: productId, quantity: 2, unitPrice: 30.00]]]))
+assert orderResponse.status == 200 : orderResponse.body
+def order = json.parseText(orderResponse.body)
+
+def reserveResponse = request('POST', "${inventoryUrl}/inventory/reserve", JsonOutput.toJson([orderId: order.orderId, items: order.items]))
+assert reserveResponse.status == 200 : reserveResponse.body
+def reservation = json.parseText(reserveResponse.body)
+
+def paymentResponse = request('POST', "${paymentUrl}/payments", JsonOutput.toJson([orderId: order.orderId, amount: order.total, forceFailure: true]))
+assert paymentResponse.status == 200 : paymentResponse.body
+assert json.parseText(paymentResponse.body).status == 'FAILED'
+
+def releaseResponse = request('POST', "${inventoryUrl}/inventory/release/${reservation.reservationId}")
+assert releaseResponse.status == 200 : releaseResponse.body
+
+def cancelResponse = request('POST', "${orderUrl}/orders/${order.orderId}/cancel", JsonOutput.toJson([reason: 'Payment failed']))
+assert cancelResponse.status == 200 : cancelResponse.body
+assert json.parseText(cancelResponse.body).status == 'CANCELLED'
+
+def notifyResponse = request('POST', "${notificationUrl}/notifications", JsonOutput.toJson([customerId: customerId, channel: 'EMAIL', subject: 'Payment failed', body: "Order ${order.orderId} was cancelled because payment failed."]))
+assert notifyResponse.status == 200 : notifyResponse.body
+assert json.parseText(notifyResponse.body).status == 'SENT'
+          ]]></script>
+        </con:config>
+      </con:testStep>
+      <con:properties/>
+    </con:testCase>
+    <con:properties/>
+  </con:testSuite>
+  <con:properties/>
+  <con:wssContainer/>
+  <con:oAuth2ProfileContainer/>
+  <con:oAuth1ProfileContainer/>
+</con:soapui-project>

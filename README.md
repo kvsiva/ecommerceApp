@@ -2,6 +2,10 @@
 
 This project is generated from the attached architecture diagram. It contains a Spring Boot microservices skeleton for:
 
+## Architecture Diagram
+
+![E-Commerce Platform Microservices Architecture](docs/architecture/EcommerceApp.png)
+
 - API Gateway
 - Auth Service
 - Product Service
